@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+.DS_Store
+*.tsbuildinfo
+
+# 用户数据（人设、日记）不入库
+server/personas/
+server/diaries/

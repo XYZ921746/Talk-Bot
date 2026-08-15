@@ -1,0 +1,7 @@
+{
+  "main": "server/dist/index.js",
+  "output": "sea-prep.blob",
+  "assets": {
+    "web/dist": "web/dist"
+  }
+}

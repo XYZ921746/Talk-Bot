@@ -1,0 +1,20 @@
+{
+  "name": "ai-voice-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "多端互通的 AI 语音通话：实时语音通话、OpenAI/Anthropic 双格式接入、自定义 TTS/STT、人设与插件系统",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "test": "node test/e2e.mjs",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎤 麦克风诊断</title>
+<style>
+  body { font-family: sans-serif; max-width: 560px; margin: 24px auto; padding: 0 16px; color: #1f2329; }
+  h2 { margin-bottom: 8px; }
+  button { font-size: 16px; padding: 10px 22px; border: none; border-radius: 10px; background: #2f9dff; color: #fff; cursor: pointer; }
+  #meterWrap { height: 24px; width: 100%; background: #eef1f5; border-radius: 6px; margin: 12px 0; overflow: hidden; }
+  #meter { height: 0%; width: 100%; background: linear-gradient(90deg, #00a5ff, #4da3ff); transition: height 60ms linear; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-break: break-all; min-height: 120px; }
+  .ok { color: #4ade80; } .err { color: #f87171; }
+</style>
+</head>
+<body>
+<h2>🎤 麦克风诊断</h2>
+<p>点击下方按钮并<strong>对着麦克风说话</strong>，看每一步的结果：</p>
+<button id="btn" onclick="start()">开始测试麦克风</button>
+<div id="meterWrap"><div id="meter"></div></div>
+<pre id="log">等待开始…</pre>
+
+<script>
+function log(msg, cls) {
+  const p = document.getElementById('log');
+  p.innerHTML += '<span class="' + (cls || '') + '">' + msg + '</span>\n';
+}
+let logCount = 0;
+
+async function start() {
+  document.getElementById('btn').disabled = true;
+  document.getElementById('log').textContent = '';
+  logCount = 0;
+
+  log('1️⃣ getUserMedia…');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const t = stream.getAudioTracks()[0];
+    log('   ✅ 麦克风已获取 track: ' + t.label, 'ok');
+    log('   enabled=' + t.enabled + ' muted=' + t.muted + ' 采样率见下', 'ok');
+  } catch (e) {
+    log('   ❌ getUserMedia 失败: ' + e.name + ' — ' + e.message, 'err');
+    log('   ⚠️ 如果这是手机通过 http 访问：浏览器禁止 HTTP 环境的麦克风，需 HTTPS', 'err');
+    return;
+  }
+
+  log('2️⃣ AudioContext…');
+  let ctx = new AudioContext();
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (e) { log('   resume 失败: ' + e.message, 'err'); }
+  }
+  log('   state=' + ctx.state + ' sampleRate=' + ctx.sampleRate, 'ok');
+  if (ctx.state !== 'running') { log('   ❌ 上下文未运行', 'err'); return; }
+
+  log('3️⃣ AudioWorklet…');
+  try {
+    const code = `
+      class P extends AudioWorkletProcessor {
+        process(inputs) {
+          const ch = inputs[0] && inputs[0][0];
+          if (ch && ch.length) {
+            let s = 0;
+            for (let k = 0; k < ch.length; k++) s += ch[k] * ch[k];
+            this.port.postMessage(Math.sqrt(s / ch.length));
+          }
+          return true;
+        }
+      }
+      registerProcessor('diag', P);`;
+    const url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+    await ctx.audioWorklet.addModule(url);
+    const node = new AudioWorkletNode(ctx, 'diag');
+    node.port.onmessage = (e) => {
+      const rms = e.data;
+      logCount++;
+      if (logCount <= 4) log('   帧 RMS=' + rms.toFixed(4));
+      document.getElementById('meter').style.height = Math.min(100, rms * 350) + '%';
+    };
+    ctx.createMediaStreamSource(stream).connect(node);
+    node.connect(ctx.destination);
+    log('   ✅ 正在监听… 现在说话，看上面的蓝色电平条', 'ok');
+    log('   电平条随说话跳动 = 麦克风完全正常');
+  } catch (e) {
+    log('   ❌ worklet 失败: ' + e.name + ' — ' + e.message, 'err');
+  }
+}
+</script>
+</body>
+</html>
